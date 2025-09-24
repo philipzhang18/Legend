@@ -5,9 +5,15 @@
       "Bash(git remote add:*)",
       "Bash(pip --version)",
       "Bash(git add:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
+  },
+  "proxy": {
+    "host": "127.0.0.1",
+    "port": 1080
   }
 }
