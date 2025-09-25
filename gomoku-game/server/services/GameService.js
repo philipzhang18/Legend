@@ -64,7 +64,8 @@ class GameService {
       throw new Error('You are already in this room');
     }
 
-    let color, playerCount;
+    let color; let
+      playerCount;
 
     if (!room.black_player_id) {
       await GameRoom.update(room.id, { black_player_id: userId });
@@ -296,18 +297,19 @@ class GameService {
    */
   static checkWin(board, row, col, player) {
     const directions = [
-      [0, 1],   // 水平
-      [1, 0],   // 垂直
-      [1, 1],   // 对角线1
-      [1, -1]   // 对角线2
+      [0, 1], // 水平
+      [1, 0], // 垂直
+      [1, 1], // 对角线1
+      [1, -1], // 对角线2
     ];
 
-    for (let [dx, dy] of directions) {
+    for (const [dx, dy] of directions) {
       let count = 1;
-      let winningLine = [[row, col]];
+      const winningLine = [[row, col]];
 
       // 向前检查
-      let r = row + dx, c = col + dy;
+      let r = row + dx; let
+        c = col + dy;
       while (r >= 0 && r < 15 && c >= 0 && c < 15 && board[r][c] === player) {
         count++;
         winningLine.push([r, c]);

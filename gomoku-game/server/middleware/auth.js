@@ -80,33 +80,31 @@ const optionalAuth = async (req, res, next) => {
 /**
  * 权限检查中间件
  */
-const requirePermission = (permission) => {
-  return async (req, res, next) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required',
-        });
-      }
-
-      const hasPermission = await AuthService.hasPermission(req.user.id, permission);
-
-      if (!hasPermission) {
-        return res.status(403).json({
-          success: false,
-          error: 'Insufficient permissions',
-        });
-      }
-
-      next();
-    } catch (error) {
-      return res.status(500).json({
+const requirePermission = (permission) => async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
         success: false,
-        error: 'Permission check failed',
+        error: 'Authentication required',
       });
     }
-  };
+
+    const hasPermission = await AuthService.hasPermission(req.user.id, permission);
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions',
+      });
+    }
+
+    next();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: 'Permission check failed',
+    });
+  }
 };
 
 /**

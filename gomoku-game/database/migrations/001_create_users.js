@@ -3,7 +3,7 @@ const knex = require('knex');
 /**
  * 用户表迁移
  */
-exports.up = function(knex) {
+exports.up = function (knex) {
   return knex.schema.createTable('users', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.string('username', 50).notNullable().unique();
@@ -29,6 +29,6 @@ exports.up = function(knex) {
   });
 };
 
-exports.down = function(knex) {
+exports.down = function (knex) {
   return knex.schema.dropTable('users');
 };

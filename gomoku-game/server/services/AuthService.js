@@ -32,7 +32,9 @@ class AuthService {
    * 用户注册
    */
   static async register(userData) {
-    const { username, email, password, nickname } = userData;
+    const {
+      username, email, password, nickname,
+    } = userData;
 
     // 检查用户名是否已存在
     if (await User.isUsernameExists(username)) {
@@ -231,7 +233,7 @@ class AuthService {
 
     const resetToken = this.generateToken(
       { userId: user.id, type: 'password_reset' },
-      '1h' // 1小时有效期
+      '1h', // 1小时有效期
     );
 
     // 缓存重置令牌

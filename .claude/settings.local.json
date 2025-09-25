@@ -8,13 +8,25 @@
       "Bash(rm:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(git ls-tree:*)"
+      "Bash(git ls-tree:*)",
+      "Bash(npm install)",
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(echo $APPDATA)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Read(//c/Users/philipzhang/AppData/Roaming/**)",
+      "Bash(env)",
+      "Read(//c/Users/philipzhang/AppData/**)",
+      "Read(//c/Users/philipzhang/**)",
+      "Bash(curl:*)",
+      "Bash(nslookup:*)",
+      "Bash(ping:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(ipconfig:*)"
     ],
     "deny": [],
     "ask": []
-  },
-  "proxy": {
-    "host": "127.0.0.1",
-    "port": 1080
   }
 }

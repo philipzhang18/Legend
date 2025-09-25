@@ -1,7 +1,7 @@
 /**
  * 游戏记录表迁移
  */
-exports.up = function(knex) {
+exports.up = function (knex) {
   return knex.schema.createTable('game_records', (table) => {
     table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
     table.uuid('room_id').notNullable().references('id').inTable('game_rooms');
@@ -26,6 +26,6 @@ exports.up = function(knex) {
   });
 };
 
-exports.down = function(knex) {
+exports.down = function (knex) {
   return knex.schema.dropTable('game_records');
 };

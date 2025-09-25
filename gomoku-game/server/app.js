@@ -60,11 +60,11 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: [\"'self'\"],
-      styleSrc: [\"'self'\", \"'unsafe-inline'\"],
-      scriptSrc: [\"'self'\"],
-      imgSrc: [\"'self'\", \"data:\", \"https:\"],
-      connectSrc: [\"'self'\", \"ws:\", \"wss:\"],
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
     },
   },
   crossOriginEmbedderPolicy: false,

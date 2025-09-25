@@ -59,7 +59,9 @@ class AuthController {
         });
       }
 
-      const { username, email, password, nickname } = req.body;
+      const {
+        username, email, password, nickname,
+      } = req.body;
 
       // 注册用户
       const result = await AuthService.register({
