@@ -24,7 +24,9 @@
       "Bash(ping:*)",
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
-      "Bash(ipconfig:*)"
+      "Bash(ipconfig:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
