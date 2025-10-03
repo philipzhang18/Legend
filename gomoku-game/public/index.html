@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋 - Legend Gomoku</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Legend 五子棋</h1>
+            <div class="game-info">
+                <div class="player-info">
+                    <div class="username-section">
+                        <input type="text" id="username-input" placeholder="输入昵称" maxlength="12">
+                        <button id="set-username" class="btn primary">设置昵称</button>
+                        <span id="current-username" class="current-username">游客</span>
+                    </div>
+                    <div class="current-player">
+                        <span class="player-indicator black"></span>
+                        <span id="current-player-text">黑棋先手</span>
+                    </div>
+                    <div class="game-status" id="game-status">等待开始游戏</div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="game-area">
+                <div class="board-container">
+                    <canvas id="game-board" width="600" height="600"></canvas>
+                    <div class="winning-line" id="winning-line"></div>
+                </div>
+
+                <div class="control-panel">
+                    <div class="room-controls">
+                        <div class="room-section">
+                            <h3>房间设置</h3>
+                            <input type="text" id="room-id" placeholder="输入房间ID" maxlength="10">
+                            <button id="create-room" class="btn primary">创建房间</button>
+                            <button id="join-room" class="btn secondary">加入房间</button>
+                            <button id="leave-room" class="btn danger" style="display:none;">离开房间</button>
+                        </div>
+                        <div class="room-info">
+                            <div id="room-display" class="room-status">未连接房间</div>
+                            <div id="player-count" class="player-count">玩家: 0/2</div>
+                        </div>
+                    </div>
+
+                    <div class="game-controls">
+                        <button id="restart-game" class="btn primary">重新开始</button>
+                        <button id="surrender" class="btn danger">认输</button>
+                    </div>
+
+                    <div class="game-history">
+                        <h4>游戏历史</h4>
+                        <div id="move-history" class="move-list"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div class="chat-section">
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input">
+                    <input type="text" id="chat-input" placeholder="输入消息..." maxlength="100">
+                    <button id="send-chat" class="btn">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="game-modal">
+        <div class="modal-content">
+            <h2 id="modal-title">游戏结果</h2>
+            <p id="modal-message"></p>
+            <div class="modal-buttons">
+                <button id="modal-ok" class="btn primary">确定</button>
+                <button id="modal-restart" class="btn secondary">再来一局</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
