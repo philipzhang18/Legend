@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋调试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .log {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 3px;
+        }
+        .log-entry.success {
+            color: green;
+        }
+        .log-entry.error {
+            color: red;
+        }
+        .log-entry.info {
+            color: blue;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>五子棋游戏调试工具</h1>
+
+    <div id="connection-status" class="status disconnected">
+        状态: 未连接
+    </div>
+
+    <div>
+        <h3>1. 测试连接</h3>
+        <button onclick="testConnection()">连接服务器</button>
+    </div>
+
+    <div>
+        <h3>2. 设置用户名</h3>
+        <input type="text" id="username" placeholder="输入用户名" value="测试用户">
+        <button onclick="setUsername()">设置用户名</button>
+    </div>
+
+    <div>
+        <h3>3. 房间操作</h3>
+        <button onclick="createRoom()">创建房间</button>
+        <input type="text" id="roomId" placeholder="房间ID">
+        <button onclick="joinRoom()">加入房间</button>
+    </div>
+
+    <div>
+        <h3>调试日志</h3>
+        <button onclick="clearLog()">清空日志</button>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket = null;
+        let roomId = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function updateStatus(connected) {
+            const statusDiv = document.getElementById('connection-status');
+            if (connected) {
+                statusDiv.className = 'status connected';
+                statusDiv.textContent = '状态: 已连接 (ID: ' + socket.id + ')';
+            } else {
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = '状态: 未连接';
+            }
+        }
+
+        function generateGuestToken() {
+            const guestData = {
+                id: 'guest_' + Math.random().toString(36).substr(2, 9),
+                username: '游客',
+                type: 'guest'
+            };
+            const tokenData = JSON.stringify(guestData);
+            // 将UTF-8字符串转换为base64（支持中文）
+            return btoa(encodeURIComponent(tokenData).replace(/%([0-9A-F]{2})/g,
+                function toSolidBytes(match, p1) {
+                    return String.fromCharCode('0x' + p1);
+                }));
+        }
+
+        function testConnection() {
+            log('开始连接服务器...', 'info');
+
+            const token = localStorage.getItem('authToken') || generateGuestToken();
+            log('使用token: ' + token.substring(0, 30) + '...', 'info');
+
+            socket = io({
+                auth: { token: token }
+            });
+
+            socket.on('connect', () => {
+                log('✅ 连接成功! Socket ID: ' + socket.id, 'success');
+                updateStatus(true);
+            });
+
+            socket.on('disconnect', () => {
+                log('❌ 连接断开', 'error');
+                updateStatus(false);
+            });
+
+            socket.on('connect_error', (error) => {
+                log('❌ 连接错误: ' + error.message, 'error');
+                updateStatus(false);
+            });
+
+            // 监听所有房间相关事件
+            socket.on('room-created', (data) => {
+                log('✅ 房间创建成功! 房间ID: ' + data.roomId + ', 颜色: ' + data.color, 'success');
+                roomId = data.roomId;
+                document.getElementById('roomId').value = data.roomId;
+            });
+
+            socket.on('room-joined', (data) => {
+                log('✅ 成功加入房间: ' + data.roomId + ', 颜色: ' + data.color, 'success');
+            });
+
+            socket.on('room-error', (data) => {
+                log('❌ 房间错误: ' + data.message, 'error');
+            });
+
+            socket.on('game-error', (data) => {
+                log('❌ 游戏错误: ' + data.message, 'error');
+            });
+
+            socket.on('username-updated', (data) => {
+                log('✅ 用户名已更新: ' + data.username, 'success');
+                if (data.token) {
+                    localStorage.setItem('authToken', data.token);
+                }
+            });
+
+            socket.on('username-error', (data) => {
+                log('❌ 用户名更新失败: ' + data.message, 'error');
+            });
+
+            socket.on('game-start', () => {
+                log('🎮 游戏开始!', 'success');
+            });
+
+            socket.on('player-joined', (data) => {
+                log('👥 有玩家加入房间', 'info');
+            });
+        }
+
+        function setUsername() {
+            const username = document.getElementById('username').value.trim();
+            if (!socket || !socket.connected) {
+                log('❌ 请先连接服务器', 'error');
+                return;
+            }
+
+            if (!username || username.length < 2) {
+                log('❌ 用户名至少需要2个字符', 'error');
+                return;
+            }
+
+            log('发送用户名更新请求: ' + username, 'info');
+            socket.emit('update-username', { username: username });
+        }
+
+        function createRoom() {
+            if (!socket || !socket.connected) {
+                log('❌ 请先连接服务器', 'error');
+                return;
+            }
+
+            log('发送创建房间请求...', 'info');
+            socket.emit('create-room', {
+                roomName: '测试房间',
+                isPrivate: false
+            });
+        }
+
+        function joinRoom() {
+            const roomId = document.getElementById('roomId').value.trim();
+            if (!socket || !socket.connected) {
+                log('❌ 请先连接服务器', 'error');
+                return;
+            }
+
+            if (!roomId) {
+                log('❌ 请输入房间ID', 'error');
+                return;
+            }
+
+            log('发送加入房间请求: ' + roomId, 'info');
+            socket.emit('join-room', { roomId: roomId });
+        }
+
+        // 页面加载时自动连接
+        window.addEventListener('load', () => {
+            log('页面加载完成', 'info');
+            log('点击"连接服务器"按钮开始测试', 'info');
+        });
+    </script>
+</body>
+</html>
