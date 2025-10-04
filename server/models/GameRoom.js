@@ -26,8 +26,12 @@ class GameRoom {
       updated_at: new Date(),
     };
 
-    // 如果数据库未连接，使用内存存储
-    if (!knex.isConnected || !knex.isConnected()) {
+    // 检查creator_id是否为有效的UUID格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isGuestUser = !uuidRegex.test(roomData.creatorId);
+
+    // 如果数据库未连接，或者是游客用户，使用内存存储
+    if (!knex.isConnected || !knex.isConnected() || isGuestUser) {
       memoryRooms.set(room.room_code, room);
       return room;
     }
@@ -43,10 +47,18 @@ class GameRoom {
    * 通过房间代码查找房间
    */
   static async findByRoomCode(roomCode) {
-    if (!knex.isConnected || !knex.isConnected()) {
-      return memoryRooms.get(roomCode) || null;
+    // 先检查内存中是否有这个房间（游客房间）
+    const memoryRoom = memoryRooms.get(roomCode);
+    if (memoryRoom) {
+      return memoryRoom;
     }
 
+    // 如果数据库未连接，返回null
+    if (!knex.isConnected || !knex.isConnected()) {
+      return null;
+    }
+
+    // 在数据库中查找
     return await knex(this.tableName)
       .where({ room_code: roomCode })
       .first();
@@ -56,13 +68,17 @@ class GameRoom {
    * 通过ID查找房间
    */
   static async findById(id) {
+    // 先检查内存中是否有这个房间（游客房间）
+    for (const room of memoryRooms.values()) {
+      if (room.id === id) return room;
+    }
+
+    // 如果数据库未连接，返回null
     if (!knex.isConnected || !knex.isConnected()) {
-      for (const room of memoryRooms.values()) {
-        if (room.id === id) return room;
-      }
       return null;
     }
 
+    // 在数据库中查找
     return await knex(this.tableName)
       .where({ id })
       .first();
@@ -72,14 +88,28 @@ class GameRoom {
    * 更新房间信息
    */
   static async update(id, updateData) {
-    if (!knex.isConnected || !knex.isConnected()) {
-      for (const [code, room] of memoryRooms.entries()) {
-        if (room.id === id) {
-          Object.assign(room, updateData, { updated_at: new Date() });
-          memoryRooms.set(code, room);
-          return room;
-        }
+    // 先检查内存中是否有这个房间（游客房间）
+    for (const [code, room] of memoryRooms.entries()) {
+      if (room.id === id) {
+        Object.assign(room, updateData, { updated_at: new Date() });
+        memoryRooms.set(code, room);
+        return room;
       }
+    }
+
+    // 如果数据库未连接，返回null
+    if (!knex.isConnected || !knex.isConnected()) {
+      return null;
+    }
+
+    // 检查更新数据中是否包含游客用户ID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const hasGuestUser = (updateData.creator_id && !uuidRegex.test(updateData.creator_id)) ||
+                         (updateData.black_player_id && !uuidRegex.test(updateData.black_player_id)) ||
+                         (updateData.white_player_id && !uuidRegex.test(updateData.white_player_id));
+
+    if (hasGuestUser) {
+      // 如果更新数据包含游客ID，不能写入数据库，返回null
       return null;
     }
 
@@ -98,16 +128,20 @@ class GameRoom {
    * 删除房间
    */
   static async delete(id) {
-    if (!knex.isConnected || !knex.isConnected()) {
-      for (const [code, room] of memoryRooms.entries()) {
-        if (room.id === id) {
-          memoryRooms.delete(code);
-          return 1;
-        }
+    // 先检查内存中是否有这个房间（游客房间）
+    for (const [code, room] of memoryRooms.entries()) {
+      if (room.id === id) {
+        memoryRooms.delete(code);
+        return 1;
       }
+    }
+
+    // 如果数据库未连接，返回0
+    if (!knex.isConnected || !knex.isConnected()) {
       return 0;
     }
 
+    // 在数据库中删除
     return await knex(this.tableName)
       .where({ id })
       .del();
@@ -124,7 +158,11 @@ class GameRoom {
    * 获取用户活跃房间
    */
   static async getUserActiveRoom(userId) {
-    if (!knex.isConnected || !knex.isConnected()) {
+    // 检查userId是否为有效的UUID格式（游客ID不是UUID）
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isGuestUser = !uuidRegex.test(userId);
+
+    if (!knex.isConnected || !knex.isConnected() || isGuestUser) {
       for (const room of memoryRooms.values()) {
         if ((room.creator_id === userId ||
              room.black_player_id === userId ||

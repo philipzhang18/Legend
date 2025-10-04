@@ -25,6 +25,44 @@ Legend Gomoku 企业版是一个功能完整的商业级双人对战五子棋游
 - **ELO评分系统**: 动态评分和排行榜
 - **游戏历史**: 详细的对战记录和统计
 
+#### 🏆 高级功能
+
+**ELO评分系统**
+- **动态K-factor**: 根据玩家等级和游戏数自动调整
+  - 新手 (< 30局): K = 40
+  - 低分 (< 1400): K = 32
+  - 中等 (< 2000): K = 24
+  - 高手 (≥ 2000): K = 16
+- **7个段位系统**: 青铜 → 白银 → 黄金 → 铂金 → 钻石 → 大师 → 宗师
+- **全球排行榜**: 实时更新的玩家排名
+
+**观战功能**
+- **无限观战者**: 支持多人同时观看对局
+- **实时同步**: 观战者实时接收棋局进展
+- **观战者列表**: 显示当前观战人数和列表
+
+**游戏回放**
+- **完整棋谱**: 记录每一步移动和时间戳
+- **回放播放器**: 支持暂停、快进、后退
+- **分享功能**: 生成回放链接分享精彩对局
+
+**房间管理**
+- **公开/私有房间**: 灵活的房间可见性控制
+- **房间列表**: 浏览所有公开房间
+- **房间搜索**: 通过房间代码快速加入
+- **房间历史**: 查看房间的完整游戏记录
+
+**断线重连**
+- **自动重连**: 网络断开后自动尝试重连（最多5次）
+- **状态恢复**: 重连后自动恢复游戏状态
+- **友好提示**: 显示重连进度和状态
+
+**游客模式**
+- **无需注册**: 游客可以直接开始游戏
+- **临时身份**: 自动生成游客ID和昵称
+- **完整功能**: 支持所有核心游戏功能
+- **数据隔离**: 游客数据独立存储，不影响注册用户
+
 #### 🏗️ 技术架构
 - **微服务架构**: 模块化设计，易于扩展
 - **数据库持久化**: PostgreSQL + Redis缓存
@@ -163,6 +201,192 @@ npm run docker:build # 构建Docker镜像
 npm run docker:run   # 运行Docker容器
 ```
 
+## 📡 API使用指南
+
+### 高级功能API
+
+#### 1. ELO评分和排行榜
+
+**获取全球排行榜**:
+```bash
+curl http://localhost:3000/api/game/leaderboard?limit=100
+```
+
+响应示例:
+```json
+{
+  "success": true,
+  "leaderboard": [
+    {
+      "id": "user123",
+      "username": "player1",
+      "rating": 1650,
+      "tier": "铂金",
+      "games_played": 50,
+      "games_won": 35,
+      "win_rate": 70.0
+    }
+  ]
+}
+```
+
+**获取用户统计**:
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:3000/api/game/users/USER_ID/stats
+```
+
+**获取用户游戏历史**:
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:3000/api/game/users/USER_ID/history?limit=20
+```
+
+#### 2. 房间管理
+
+**获取公开房间列表**:
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:3000/api/game/rooms?limit=20
+```
+
+**获取房间详情**:
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:3000/api/game/rooms/ROOM_CODE
+```
+
+**获取游戏历史回放**:
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:3000/api/game/rooms/ROOM_CODE/history
+```
+
+响应示例:
+```json
+{
+  "success": true,
+  "history": {
+    "roomCode": "ABC123",
+    "moves": [
+      { "row": 7, "col": 7, "player": "black", "timestamp": "2025-10-04T10:00:00Z" },
+      { "row": 7, "col": 8, "player": "white", "timestamp": "2025-10-04T10:00:05Z" }
+    ],
+    "result": {
+      "winner": "black",
+      "winningLine": [[7,7], [7,8], [7,9], [7,10], [7,11]]
+    }
+  }
+}
+```
+
+#### 3. 观战功能
+
+通过WebSocket加入观战:
+```javascript
+// 在浏览器控制台执行
+socket.emit('join-room', {
+  roomId: 'ROOM_CODE',
+  asSpectator: true
+});
+
+// 监听观战者加入确认
+socket.on('spectator-joined', (data) => {
+  console.log('观战加入成功', data);
+});
+
+// 监听棋局进展
+socket.on('move-made', (data) => {
+  console.log('新的移动', data);
+});
+```
+
+#### 4. 游客模式使用
+
+**创建游客账号**:
+```bash
+curl -X POST http://localhost:3000/api/auth/guest \
+  -H "Content-Type: application/json" \
+  -d '{"username": "Guest123"}'
+```
+
+响应示例:
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "guest_abc123",
+    "username": "Guest123",
+    "isGuest": true
+  }
+}
+```
+
+**游客创建房间**:
+- 游客房间存储在内存中（memoryRooms）
+- 支持所有标准游戏功能
+- 重启服务器后数据清空
+
+### WebSocket事件
+
+#### 连接认证
+```javascript
+const socket = io({
+  auth: { token: 'YOUR_JWT_TOKEN' }
+});
+```
+
+#### 创建房间
+```javascript
+socket.emit('create-room', {
+  roomName: 'My Room',
+  isPrivate: false,
+  timeLimit: 30
+});
+
+socket.on('room-created', (data) => {
+  console.log('房间创建成功', data.roomCode);
+});
+```
+
+#### 加入房间
+```javascript
+socket.emit('join-room', {
+  roomId: 'ABC123',
+  asSpectator: false  // true为观战模式
+});
+
+socket.on('room-joined', (data) => {
+  console.log('成功加入房间', data);
+});
+```
+
+#### 下棋
+```javascript
+socket.emit('make-move', {
+  roomId: 'ABC123',
+  row: 7,
+  col: 7
+});
+
+socket.on('move-made', (data) => {
+  console.log('移动完成', data);
+});
+```
+
+#### 聊天
+```javascript
+socket.emit('send-message', {
+  roomId: 'ABC123',
+  message: 'Hello!'
+});
+
+socket.on('new-message', (data) => {
+  console.log('新消息', data);
+});
+```
+
 ## 🔒 安全特性
 
 ### 认证与授权
@@ -199,14 +423,76 @@ npm run docker:run   # 运行Docker容器
 
 ## 🧪 测试
 
-### 测试覆盖
-- **单元测试**: 业务逻辑完整测试
-- **集成测试**: API端点测试
-- **性能测试**: 负载和压力测试
-- **安全测试**: 漏洞扫描和渗透测试
+### 测试套件
+
+#### 单元测试
+测试业务逻辑和核心功能：
+
+```bash
+# 运行所有单元测试
+npm test
+
+# 运行特定测试文件
+npm test -- tests/unit/GameService.test.js
+npm test -- tests/unit/AuthService.test.js
+
+# 监视模式（自动重新运行）
+npm run test:watch
+
+# 生成测试覆盖率报告
+npm run test -- --coverage
+```
+
+**单元测试文件**:
+- `tests/unit/GameService.test.js` - 游戏服务测试
+  - 房间创建/加入
+  - 下棋逻辑
+  - 胜负判定
+  - 游戏重启
+- `tests/unit/AuthService.test.js` - 认证服务测试
+  - 用户注册/登录
+  - JWT验证
+  - 密码管理
+
+#### 集成测试
+测试API端点和完整流程：
+
+```bash
+# 运行所有集成测试
+npm run test:integration
+
+# 运行特定集成测试
+npm run test:integration -- tests/integration/auth.test.js
+npm run test:integration -- tests/integration/socket.test.js
+```
+
+**集成测试文件**:
+- `tests/integration/auth.test.js` - 认证API测试
+  - POST /api/auth/register
+  - POST /api/auth/login
+  - POST /api/auth/guest
+  - GET /api/auth/me
+  - PUT /api/auth/profile
+- `tests/integration/socket.test.js` - WebSocket测试
+  - 连接认证
+  - 房间创建/加入
+  - 游戏对局
+  - 实时聊天
+
+#### 测试覆盖率
+
+查看测试覆盖率报告：
+
+```bash
+# 生成覆盖率报告
+npm run test -- --coverage
+
+# 在浏览器中查看详细报告
+open coverage/lcov-report/index.html
+```
 
 ### 质量指标
-- **代码覆盖率**: > 80%
+- **代码覆盖率**: > 60%
 - **性能基准**: < 200ms响应时间
 - **可用性**: 99.9% uptime
 - **安全性**: OWASP TOP 10 合规
@@ -273,6 +559,131 @@ server {
 ```
 
 ### 监控配置
+
+#### Prometheus监控
+
+应用内置了完整的Prometheus监控系统：
+
+**访问监控端点**:
+```bash
+# Prometheus指标端点
+curl http://localhost:3000/metrics
+
+# 健康检查端点
+curl http://localhost:3000/health
+```
+
+**可用指标**:
+- `gomoku_http_requests_total` - HTTP请求总数（按方法/路由/状态码）
+- `gomoku_http_request_duration_seconds` - HTTP请求持续时间
+- `gomoku_websocket_connections` - WebSocket连接数
+- `gomoku_active_rooms` - 活跃房间数（按状态）
+- `gomoku_games_total` - 游戏总数（按结果）
+- `gomoku_game_duration_seconds` - 游戏时长
+- `gomoku_moves_per_game` - 每局步数
+- `gomoku_db_queries_total` - 数据库查询总数
+- `gomoku_db_query_duration_seconds` - 数据库查询持续时间
+- `gomoku_errors_total` - 错误计数（按类型/严重程度）
+
+**配置Prometheus采集**:
+
+创建 `prometheus.yml`:
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'gomoku'
+    static_configs:
+      - targets: ['localhost:3000']
+    metrics_path: '/metrics'
+```
+
+启动Prometheus:
+```bash
+docker run -d \
+  -p 9090:9090 \
+  -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus
+```
+
+访问 Prometheus UI: http://localhost:9090
+
+#### Grafana可视化
+
+**启动Grafana**:
+```bash
+docker run -d \
+  -p 3001:3000 \
+  --name grafana \
+  grafana/grafana
+```
+
+访问 Grafana: http://localhost:3001 (默认账号: admin/admin)
+
+**添加数据源**:
+1. 登录Grafana
+2. Configuration → Data Sources → Add data source
+3. 选择 Prometheus
+4. URL: `http://localhost:9090`
+5. 点击 "Save & Test"
+
+**导入仪表板**:
+- 游戏性能监控
+- 用户活动统计
+- 系统资源使用
+- 错误和异常追踪
+
+#### 健康检查
+
+**健康检查端点响应**:
+```json
+{
+  "success": true,
+  "status": "healthy",
+  "timestamp": "2025-10-04T12:00:00.000Z",
+  "uptime": 3600,
+  "memory": {
+    "rss": 85352448,
+    "heapTotal": 23519232,
+    "heapUsed": 22519216
+  },
+  "services": {
+    "redis": "healthy",
+    "database": "healthy"
+  }
+}
+```
+
+**状态说明**:
+- `healthy` - 所有服务正常
+- `degraded` - 部分服务异常但核心功能可用
+- `unhealthy` - 严重故障
+
+#### 日志系统
+
+**日志位置**:
+- `logs/combined.log` - 所有日志
+- `logs/error.log` - 错误日志
+- `logs/access.log` - 访问日志
+
+**查看实时日志**:
+```bash
+# 应用日志
+tail -f logs/combined.log
+
+# 错误日志
+tail -f logs/error.log
+
+# 只看特定级别
+tail -f logs/combined.log | grep "error"
+```
+
+**日志级别**:
+- `error` - 错误信息
+- `warn` - 警告信息
+- `info` - 一般信息
+- `debug` - 调试信息
 
 1. **日志收集**
 ```bash

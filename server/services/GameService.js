@@ -59,24 +59,50 @@ class GameService {
   /**
    * 加入游戏房间
    */
-  static async joinRoom(userId, roomCode) {
+  static async joinRoom(userId, roomCode, asSpectator = false) {
     const room = await GameRoom.findByRoomCode(roomCode);
     if (!room) {
-      throw new Error('Room not found');
+      throw new Error('房间不存在');
     }
 
     if (room.status === 'finished') {
-      throw new Error('Game has finished');
+      throw new Error('游戏已结束');
     }
 
+    // 如果作为观战者加入
+    if (asSpectator) {
+      const gameState = await RedisService.hget(`room:${roomCode}`, 'gameState');
+      if (!gameState.spectators) {
+        gameState.spectators = [];
+      }
+
+      // 添加到观战者列表
+      if (!gameState.spectators.includes(userId)) {
+        gameState.spectators.push(userId);
+        await RedisService.hset(`room:${roomCode}`, 'gameState', gameState);
+      }
+
+      return {
+        roomInfo: {
+          roomCode,
+          board: gameState.board,
+          currentPlayer: gameState.currentPlayer,
+          gameActive: gameState.gameActive,
+          players: gameState.players,
+          spectatorCount: gameState.spectators.length
+        }
+      };
+    }
+
+    // 作为玩家加入
     // 检查房间是否已满
     if (room.black_player_id && room.white_player_id) {
-      throw new Error('Room is full');
+      throw new Error('房间已满');
     }
 
     // 检查用户是否已在房间中
     if (room.black_player_id === userId || room.white_player_id === userId) {
-      throw new Error('You are already in this room');
+      throw new Error('您已在此房间中');
     }
 
     let color; let
@@ -369,6 +395,70 @@ class GameService {
       }
     }
     return true;
+  }
+
+  /**
+   * 获取房间列表
+   */
+  static async getRoomList(limit = 20) {
+    const rooms = await GameRoom.getPublicRooms(limit);
+    return rooms.map(room => ({
+      roomCode: room.room_code,
+      name: room.name,
+      status: room.status,
+      playerCount: (room.black_player_id ? 1 : 0) + (room.white_player_id ? 1 : 0),
+      createdAt: room.created_at,
+      creatorUsername: room.creator_username || '未知',
+      blackPlayer: room.black_player_username,
+      whitePlayer: room.white_player_username
+    }));
+  }
+
+  /**
+   * 获取房间详情
+   */
+  static async getRoomInfo(roomCode) {
+    const room = await GameRoom.findByRoomCode(roomCode);
+    if (!room) {
+      throw new Error('房间不存在');
+    }
+
+    const gameState = await RedisService.hget(`room:${roomCode}`, 'gameState') || {};
+
+    return {
+      roomCode: room.room_code,
+      name: room.name,
+      status: room.status,
+      board: gameState.board || Array(15).fill(null).map(() => Array(15).fill(0)),
+      currentPlayer: gameState.currentPlayer || 'black',
+      gameActive: gameState.gameActive || false,
+      players: gameState.players || {},
+      spectatorCount: (gameState.spectators || []).length,
+      createdAt: room.created_at
+    };
+  }
+
+  /**
+   * 获取游戏历史记录
+   */
+  static async getGameHistory(roomCode) {
+    const room = await GameRoom.findByRoomCode(roomCode);
+    if (!room) {
+      throw new Error('房间不存在');
+    }
+
+    const gameState = await RedisService.hget(`room:${roomCode}`, 'gameState') || {};
+    const moveHistory = await RedisService.hget(`room:${roomCode}`, 'moveHistory') || [];
+
+    return {
+      roomCode,
+      moves: moveHistory,
+      board: gameState.board,
+      result: room.status === 'finished' ? {
+        winner: gameState.winner,
+        winningLine: gameState.winningLine
+      } : null
+    };
   }
 }
 

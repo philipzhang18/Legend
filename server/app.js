@@ -15,6 +15,8 @@ const { redisClient } = require('./config/redis');
 const authRoutes = require('./routes/auth');
 const { socketAuth } = require('./middleware/auth');
 const AuthService = require('./services/AuthService');
+const { register: metricsRegister } = require('./config/metrics');
+const { requestMetrics, trackWebSocketConnection } = require('./middleware/metrics');
 
 // 创建Express应用
 const app = express();
@@ -74,6 +76,9 @@ app.use(helmet({
 // CORS中间件
 app.use(cors(corsOptions));
 
+// Prometheus指标收集中间件
+app.use(requestMetrics);
+
 // 速率限制
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15分钟
@@ -113,16 +118,58 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // API路由
 app.use('/api/auth', authRoutes);
+const gameRoutes = require('./routes/game');
+app.use('/api/game', gameRoutes);
+
+// Prometheus指标端点
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', metricsRegister.contentType);
+    const metrics = await metricsRegister.metrics();
+    res.end(metrics);
+  } catch (error) {
+    logger.error('Failed to collect metrics:', error);
+    res.status(500).send('Failed to collect metrics');
+  }
+});
 
 // 健康检查端点
-app.get('/health', (req, res) => {
-  res.json({
+app.get('/health', async (req, res) => {
+  const health = {
     success: true,
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-  });
+    services: {
+      redis: 'unknown',
+      database: 'unknown'
+    }
+  };
+
+  // 检查Redis连接
+  try {
+    await redisClient.ping();
+    health.services.redis = 'healthy';
+  } catch (error) {
+    health.services.redis = 'unhealthy';
+    health.status = 'degraded';
+    logger.error('Redis health check failed:', error);
+  }
+
+  // 检查数据库连接
+  try {
+    const { db } = require('./config/database');
+    await db.raw('SELECT 1');
+    health.services.database = 'healthy';
+  } catch (error) {
+    health.services.database = 'unhealthy';
+    health.status = 'degraded';
+    logger.error('Database health check failed:', error);
+  }
+
+  const statusCode = health.status === 'healthy' ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // 错误处理中间件
@@ -155,6 +202,7 @@ io.use(socketAuth);
 // Socket.IO连接处理
 io.on('connection', (socket) => {
   logger.info(`User connected: ${socket.user.username} (${socket.id})`);
+  trackWebSocketConnection(socket, true);
 
   // 加入用户到在线用户列表
   socket.join(`user:${socket.user.id}`);
@@ -180,26 +228,42 @@ io.on('connection', (socket) => {
   // 加入房间
   socket.on('join-room', async (data) => {
     try {
-      const result = await GameService.joinRoom(socket.user.id, data.roomId);
+      const result = await GameService.joinRoom(socket.user.id, data.roomId, data.asSpectator);
 
       socket.join(data.roomId);
-      socket.emit('room-joined', {
-        roomId: data.roomId,
-        color: result.color,
-      });
 
-      // 通知房间内其他用户
-      socket.to(data.roomId).emit('player-joined', {
-        color: result.color,
-        playerCount: result.playerCount,
-      });
+      if (data.asSpectator) {
+        // 观战者加入
+        socket.emit('spectator-joined', {
+          roomId: data.roomId,
+          roomInfo: result.roomInfo
+        });
 
-      // 如果房间满员，开始游戏
-      if (result.playerCount === 2) {
-        io.to(data.roomId).emit('game-start', result.roomInfo);
+        // 通知房间内其他人有观战者加入
+        socket.to(data.roomId).emit('spectator-entered', {
+          spectatorId: socket.user.id,
+          spectatorName: socket.user.username
+        });
+      } else {
+        // 玩家加入
+        socket.emit('room-joined', {
+          roomId: data.roomId,
+          color: result.color,
+        });
+
+        // 通知房间内其他用户
+        socket.to(data.roomId).emit('player-joined', {
+          color: result.color,
+          playerCount: result.playerCount,
+        });
+
+        // 如果房间满员，开始游戏
+        if (result.playerCount === 2) {
+          io.to(data.roomId).emit('game-start', result.roomInfo);
+        }
       }
 
-      logger.info(`User ${socket.user.username} joined room ${data.roomId}`);
+      logger.info(`User ${socket.user.username} joined room ${data.roomId} as ${data.asSpectator ? 'spectator' : 'player'}`);
     } catch (error) {
       socket.emit('room-error', { message: error.message });
       logger.error(`Join room error: ${error.message}`);
@@ -364,9 +428,32 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 获取房间列表
+  socket.on('get-room-list', async (data) => {
+    try {
+      const rooms = await GameService.getRoomList(data?.limit || 20);
+      socket.emit('room-list', { rooms });
+    } catch (error) {
+      socket.emit('room-error', { message: error.message });
+      logger.error(`Get room list error: ${error.message}`);
+    }
+  });
+
+  // 获取房间详情
+  socket.on('get-room-info', async (data) => {
+    try {
+      const roomInfo = await GameService.getRoomInfo(data.roomId);
+      socket.emit('room-info', { roomInfo });
+    } catch (error) {
+      socket.emit('room-error', { message: error.message });
+      logger.error(`Get room info error: ${error.message}`);
+    }
+  });
+
   // 断开连接
   socket.on('disconnect', () => {
     logger.info(`User disconnected: ${socket.user.username} (${socket.id})`);
+    trackWebSocketConnection(socket, false);
     socket.leave(`user:${socket.user.id}`);
   });
 });

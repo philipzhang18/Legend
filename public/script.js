@@ -209,10 +209,16 @@ class GomokuGame {
         const token = localStorage.getItem('authToken') || this.generateGuestToken();
         console.log('使用token:', token.substring(0, 20) + '...');
 
+        // 断线重连配置
         this.socket = io({
             auth: {
                 token: token
-            }
+            },
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
         });
 
         // 连接成功
@@ -225,6 +231,32 @@ class GomokuGame {
         this.socket.on('disconnect', () => {
             console.log('❌ Socket连接断开');
             this.updateConnectionStatus(false);
+            this.showMessage('连接已断开，正在尝试重新连接...');
+        });
+
+        // 重连尝试
+        this.socket.on('reconnect_attempt', (attemptNumber) => {
+            console.log(`🔄 尝试重新连接... (${attemptNumber}/5)`);
+            this.showMessage(`正在重新连接 (${attemptNumber}/5)...`);
+        });
+
+        // 重连成功
+        this.socket.on('reconnect', (attemptNumber) => {
+            console.log(`✅ 重新连接成功 (尝试了${attemptNumber}次)`);
+            this.showMessage('重新连接成功！');
+            this.updateConnectionStatus(true);
+
+            // 如果在房间中，尝试重新加入
+            if (this.roomId) {
+                console.log('重新加入房间:', this.roomId);
+                this.socket.emit('join-room', { roomId: this.roomId });
+            }
+        });
+
+        // 重连失败
+        this.socket.on('reconnect_failed', () => {
+            console.log('❌ 重新连接失败');
+            this.showMessage('无法连接到服务器，请刷新页面重试');
         });
 
         // 房间创建成功
